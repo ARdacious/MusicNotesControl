@@ -11,17 +11,39 @@ using System.Collections;
 using System.ComponentModel.Design;
 using System.Windows.Forms.Design;
 using System.Drawing.Drawing2D;
+using NAudio.Midi;
 
 namespace MusicNotes
 {
     [Designer(typeof(MusicNotes.Design.MusicNotesControlDesign), typeof(IRootDesigner))]
     public partial class MusicNotesControll: UserControl
     {
+        public delegate void DrawMusicNotes(Graphics g);
+
+        List<Note> notes = new List<Note>();
+
+        string unicodestuff = "\u266d \u266f \u266e"; // bes sharp normal
+
         public MusicNotesControll()
         {
             InitializeComponent();
-            
+            notes.Add(new Note('A', 4, 0, false));
+            notes.Add(new Note('B', 4, 1, true));
+            notes.Add(new Note('E', 4, -1, true));
+            notes.Add(new Note('A', 4, 0, true));
+            notes.Add(new Note('A', 4, 0, false));
+            notes.Add(new Note('G', 4, 0, false));
+            notes.Add(new Note('A', 5, 0, false));
+            notes.Add(new Note('D', 3, 0, false));
+            notes.Add(new Note('E', 3, 0, false));
+            notes.Add(new Note('F', 5, 0, false));
+            notes.Add(new Note('A', 4, 0, false));
+
         }
+        static int fontSize = 16;
+        System.Drawing.Font drawFont = new System.Drawing.Font("Arial", fontSize, FontStyle.Bold);
+        System.Drawing.SolidBrush drawBrush = new System.Drawing.SolidBrush(System.Drawing.Color.Black);
+        System.Drawing.StringFormat drawFormat = new System.Drawing.StringFormat();
         Brush back = new SolidBrush(Color.White);
         Pen notePen = new Pen(Color.Black, 2);
         Pen noteBarPen = new Pen(Color.Black, 3);
@@ -31,7 +53,7 @@ namespace MusicNotes
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            
+
             var g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             // draw background
@@ -39,26 +61,57 @@ namespace MusicNotes
             g.TranslateTransform(10, 45);
             // draw some lines
             DrawLines(g, 5);
+            // draw content
+            drawDefaultNotes(g);
+            
+        }
+        public void drawDefaultNotes(Graphics g)
+        {
             // draw some notes
-            int cnt = 1;
-            DrawNote(g, noteRed, 69, 1, 1);
-            for (int midiNote = 69 -8; midiNote < 69 + 8; midiNote++)
+            int cnt = 0;
+            foreach (Note note in notes)
             {
                 cnt += 1;
-                DrawNote(g, noteBrush, midiNote, cnt%8, cnt);
+                //Console.WriteLine("{0}: {1} {2}", on, l, on.NoteLength);
+                DrawNote(g, noteBrush, note.Step, note.Octave, note.Alter, note.ShowAlter, cnt%8, cnt*6);
             }
 
         }
         int LineHeight = 5;
-        int NoteSpacing = 30;
-        protected void DrawNote(Graphics g, Brush brush, int note, int length, int time)
+        int NoteSpacing = 8;
+        string[] alterLookUp = new string[] { "\u266d", "\u266e", "\u266f" };
+        protected void DrawNote(Graphics g, Brush brush, char note, int octave, int alter, bool showalter, int length, int time)
         {
             // base A4 midi note
-            note = 69 - note + 4;
+            var noteline = 'A' - note + 4 ;
+            noteline += (octave - 4) * -8; // do not count the black keys
+            Console.WriteLine("linenr {0}", noteline);
+            // first three notes do not have a top bar
             int numBars = length - 3;
+            // longer note tail for more bars
             int tailLenght = numBars > 2 ? 30 : 25;
             var s = g.Save();
-            g.TranslateTransform(time * NoteSpacing, (note * LineHeight) + 2);
+            // translate to note offset in X
+            g.TranslateTransform(time * NoteSpacing, 0);
+            if (noteline < -2)
+            {
+                // odd lines need to draw when not on the available 5 lines drawn
+                for (int i = -3; i >= noteline; i-=2)
+                    g.DrawLine(barlinePen, -5, (i * LineHeight), dim.X+5, i*LineHeight);
+            }
+            if (noteline > 8)
+            {
+
+            }
+            // translate to note position in Y
+            g.TranslateTransform(0, (noteline * LineHeight) + 2);
+            // draw alter (5 and up is special for not drawing)
+            if (showalter)
+            {
+                var m = g.MeasureString(alterLookUp[1 + alter], drawFont);
+                //Console.WriteLine("measured {0} for {1}", m, alter);
+                g.DrawString(alterLookUp[1 + alter], drawFont, drawBrush, -(Math.Min(22, m.Width) - 2), -fontSize / 2, drawFormat);
+            }
             g.RotateTransform(-15f);
             // draw note elipse (fill or open)
             switch(length)
@@ -96,7 +149,7 @@ namespace MusicNotes
             // draw sideway line
             foreach (Point p in ptsa )
             {
-                g.DrawLine(noteBarPen, p, new Point(p.X + 20, p.Y));
+                g.DrawLine(noteBarPen, p, new Point(p.X + 10, p.Y));
             }
 
         }
@@ -134,5 +187,23 @@ namespace MusicNotes
                 demoStringValue = value;
             }
         }
+    }
+    public class Note
+    {
+        //                                    A,  B, C  D  E  F  G 
+        static int[] MidiLookup = new int[] { 9, 11, 0, 2, 4, 5, 7 }; // from C = 0
+        public Note(char step, int octave, int alter, bool show)
+        {
+            Step = step;
+            Octave = octave;
+            Alter = alter;
+            ShowAlter = show;
+            Midi = (octave * 12) + MidiLookup[step - 'A'] + alter;
+        }
+        public char Step;
+        public int Octave;
+        public int Alter;
+        public bool ShowAlter;
+        public int Midi;
     }
 }
