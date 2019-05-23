@@ -71,23 +71,29 @@ namespace MusicNotes
         {
             // draw some notes
             int cnt = 0;
+            int ticks = 0;
             foreach (Note note in Notes)
             {
-                cnt += 1;
                 //Console.WriteLine("{0}: {1} {2}", on, l, on.NoteLength);
-                DrawNote(g, noteBrush, note.Step, note.Octave, note.Alter, note.ShowAlter, note.Type, cnt*6);
+                DrawNote(g, noteBrush, note.Step, note.Octave, note.Alter, note.ShowAlter, note.Type, note.Duration, ticks, note.StartMeasure);
+                ticks += Math.Max(note.Duration, 4);
+                cnt += 1;
             }
 
         }
         int LineHeight = 5;
         int NoteSpacing = 8;
+        int MinNoteSpacing = 32;
         
-        protected void DrawNote(Graphics g, Brush brush, char step, int octave, int alter, bool showalter, string type, int time)
+        protected void DrawNote(Graphics g, Brush brush, char step, int octave, int alter, bool showalter, string type, int duration, int ticks, bool startMeasure)
         {
-            // base A4 midi note
+            // base A midi note, correct to wrap around on C
             var noteline = (step - 'A' + 5) % 7;
-            noteline += (octave - 4) * 7; // do not count the black keys
-            noteline *= -1; // invert
+            // base octave 4, 7 note lines per octave
+            noteline += (octave - 4) * 7;
+            // invert as lower = higher on the screen
+            noteline *= -1;
+            // offset 9 lines to put A4 on the correct line
             noteline += 9;
             //Console.WriteLine("linenr {0}", noteline);
             // first three notes do not have a top bar
@@ -96,7 +102,13 @@ namespace MusicNotes
             int tailLenght = numBars > 2 ? 30 : 25;
             var s = g.Save();
             // translate to note offset in X
-            g.TranslateTransform(time * NoteSpacing, 0);
+            g.TranslateTransform(ticks * NoteSpacing, 0);
+            // draw measures
+            if (startMeasure)
+            {
+                g.DrawLine(notePen, -dim.X / 2, -LineHeight, -dim.X / 2, 10 * LineHeight);
+            }
+            // draw extra lines
             if (noteline < -2)
             {
                 // even lines need to draw when not on the available 5 lines drawn
@@ -173,7 +185,7 @@ namespace MusicNotes
                 g.DrawLine(noteBarPen, p, new Point(p.X + 10, p.Y));
             }
             // determine max widht
-            maxWidth = Math.Max(maxWidth, time * NoteSpacing);
+            maxWidth = Math.Max(maxWidth, ticks * NoteSpacing);
         }
         protected void DrawLines(Graphics g, int count)
         {
@@ -239,7 +251,7 @@ namespace MusicNotes
         public static string[] alterLookUpASCII = new string[] { "b", "o", "#" };
         //                                    C  D  E  F  G  A  B
         static int[] MidiLookup = new int[] { 0, 2, 4, 5, 7, 9, 11 }; // from C = 0
-        public Note(char step, int octave, int alter, bool show, string type, int duration)
+        public Note(char step, int octave, int alter, bool show, string type, int duration, bool startmeasure = false)
         {
             Step = step;
             Octave = octave;
@@ -249,6 +261,7 @@ namespace MusicNotes
             Midi = (octave * 12) + MidiLookup[idx] + alter + 12;
             Type = type;
             Duration = duration;
+            StartMeasure = startmeasure;
         }
         public override string ToString() {
             if (ShowAlter)
@@ -267,5 +280,6 @@ namespace MusicNotes
         public string Type;
         public int Midi;
         public int Duration;
+        public bool StartMeasure;
     }
 }
